@@ -248,3 +248,68 @@ test('every number format the prompts tell the model to write actually parses', 
     )
   }
 })
+
+/* ── 6. endpoint gate ─────────────────────────────────────────────────── */
+
+test('the endpoint gate accepts the allowed host and nothing that imitates it', async () => {
+  const gate = await import('../lib/redteam/endpoint-gate.js')
+
+  for (const ok of [
+    'https://ai.delify.vn',
+    'https://ai.delify.vn/v1',
+    'ai.delify.vn',
+    'http://ai.delify.vn:8080/v1',
+    'https://sub.ai.delify.vn',
+  ]) {
+    assert.equal(gate.isAllowedEndpoint(ok), true, `should accept: ${ok}`)
+  }
+
+  for (const bad of [
+    'https://api.deepseek.com',
+    // A suffix match without the leading dot would accept this lookalike.
+    'https://ai.delify.vn.evil.test',
+    'https://aidelify.vn',
+    'https://notdelify.vn',
+    '',
+    'garbage',
+  ]) {
+    assert.equal(gate.isAllowedEndpoint(bad), false, `should refuse: ${bad}`)
+  }
+})
+
+test('the endpoint gate refuses instead of warning, and reports why', async () => {
+  const gate = await import('../lib/redteam/endpoint-gate.js')
+
+  const allowed = gate.checkEndpoint({ DE_POLICY_ENDPOINT: 'https://ai.delify.vn' })
+  assert.equal(allowed.ok, true)
+  assert.equal(allowed.status, 'allowed')
+
+  const refused = gate.checkEndpoint({ DE_POLICY_ENDPOINT: 'https://api.deepseek.com', DSH_HOME: '/nonexistent' })
+  assert.equal(refused.ok, false)
+  assert.equal(refused.status, 'refused')
+  assert.match(refused.message, /ai\.delify\.vn/)
+
+  // No endpoint discoverable is a failure to verify, never a pass.
+  const unknown = gate.checkEndpoint({ DSH_HOME: '/nonexistent-gate-test' })
+  assert.equal(unknown.ok, false)
+  assert.equal(unknown.status, 'unknown')
+
+  assert.throws(
+    () => gate.assertEndpoint({ DE_POLICY_ENDPOINT: 'https://evil.test', DSH_HOME: '/nonexistent' }),
+    (error) => error.code === 'ENDPOINT_UNSUPPORTED' && Boolean(error.verdict),
+  )
+})
+
+test('the endpoint gate reads the plugin config before the environment', async () => {
+  const gate = await import('../lib/redteam/endpoint-gate.js')
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  const { join } = await import('node:path')
+
+  const home = join(process.env.DSH_HOME, 'gate-config-test')
+  mkdirSync(join(home, 'redteam'), { recursive: true })
+  writeFileSync(join(home, 'redteam', 'config.json'), JSON.stringify({ endpoint: 'https://ai.delify.vn' }))
+
+  const verdict = gate.checkEndpoint({ DSH_HOME: home })
+  assert.equal(verdict.ok, true)
+  assert.equal(verdict.source, 'redteam/config.json')
+})

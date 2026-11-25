@@ -19908,6 +19908,31 @@ const productTheme = createProductTheme();
         ? data.config.path
         : data ? '$DSH_HOME/redteam/config.json' : 'Đang đọc…'
 
+      // Endpoint banner. The server refuses to patch when the host is pointed at an
+      // endpoint this build does not support, so the reason has to be visible before
+      // the user presses Apply — otherwise the refusal looks like a bug.
+      const gate = data && data.endpoint
+      const gateBanner = gate && gate.ok !== true
+        ? h('div', {
+            className: 'rt-gate-banner',
+            role: 'alert',
+            style: {
+              margin: '0 0 10px',
+              padding: '10px 12px',
+              border: '1px solid var(--rt-warn, #b45309)',
+              background: 'color-mix(in srgb, var(--rt-warn, #b45309) 8%, transparent)',
+              fontSize: 13,
+              lineHeight: 1.5,
+            },
+          },
+          h('strong', null, gate.status === 'unknown' ? 'Chưa xác định được endpoint' : 'Endpoint không được hỗ trợ'),
+          h('div', { style: { marginTop: 4 } }, gate.message),
+          gate.endpoint ? h('div', { style: { marginTop: 4, opacity: 0.75, fontFamily: 'monospace', fontSize: 12 } },
+            'Phát hiện: ' + gate.endpoint + (gate.source ? '  ·  nguồn: ' + gate.source : '')) : null,
+          h('div', { style: { marginTop: 4, opacity: 0.75, fontSize: 12 } },
+            'Đặt DE_POLICY_ENDPOINT=https://' + (gate.allowed || 'ai.delify.vn') + ' hoặc trỏ lại DSH vào endpoint đó.'))
+        : null
+
       return h('div', { className: 'rt-main rt-settings' },
         h('div', { className: 'rt-toolbar rt-settings-toolbar' },
           h('span', { style: { fontWeight: 600 } }, 'Thích ứng môi trường'),
@@ -19920,6 +19945,7 @@ const productTheme = createProductTheme();
           h('button', { className: 'rt-btn', disabled: busy, onClick: () => { setProxyRefresh((value) => value + 1); load() } }, busy ? 'Đang đọc…' : 'Làm mới'),
           h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, hidden: settingsSection === 'proxy', onClick: save }, 'Lưu')),
         h('div', { className: 'rt-pane rt-settings-scroll' },
+          gateBanner,
           err ? h('div', { className: 'rt-err rt-settings-alert rt-settings-alert-error', role: 'alert' }, err) : null,
           msg ? h('div', { className: (msg.err ? 'rt-err' : 'rt-foot') + ' rt-settings-alert', role: msg.err ? 'alert' : 'status' }, msg.err || msg.ok) : null,
           h('header', { className: 'rt-settings-pagehead' },
