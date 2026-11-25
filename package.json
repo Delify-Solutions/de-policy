@@ -34,6 +34,7 @@
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
+    "README.vi.md",
     "release-notes.md",
     "!**/.git",
     "!**/.{git,idea,vscode,codex,claude,agents,windsurf,cursor,ssh,aws,azure,secrets,scratch}/**",
@@ -49,7 +50,9 @@
     "!**/*.{bak,asar,tgz,log}",
     "!**/{.DS_Store,Thumbs.db}",
     "!**/*.{iml,ipr,iws,code-workspace}",
-    "!scripts/{tmp,test}-*.mjs"
+    "!scripts/{tmp,test}-*.mjs",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "embed-prompt": "node scripts/embed-default-prompt.mjs",
@@ -57,7 +60,7 @@
     "build": "node scripts/build-client.mjs",
     "test": "node --test test/*.test.js"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -105,6 +108,5 @@
   },
   "bugs": {
     "url": "https://github.com/Delify-Solutions/de-policy/issues"
-  },
-  "private": true
+  }
 }

@@ -108,7 +108,7 @@ jobs:
         run: |
           set -euo pipefail
           npm pack --dry-run 2>&1 | tee /tmp/pack.log
-          for required in client.js cordis.patch.yml package.json README.md; do
+          for required in client.js cordis.patch.yml package.json README.md LICENSE NOTICE; do
             grep -q "$required" /tmp/pack.log || { echo "::error::$required missing from the package"; exit 1; }
           done
 

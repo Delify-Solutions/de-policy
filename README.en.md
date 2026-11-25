@@ -19,7 +19,7 @@
 
 
 <p align="center">
-  English
+  <strong>English</strong> | <a href="./README.vi.md">Tiếng Việt</a>
 </p>
 
 ## Community and support
@@ -72,6 +72,11 @@ It only touches the official `@deepseek-ai` packages and local config on the use
 
 ---
 
+## Licence
+
+This product is licensed under the [Apache License 2.0](./LICENSE). The third-party
+copyright notice required by that licence is in [NOTICE](./NOTICE).
+
 <a id="strict-legal--compliance-disclaimer"></a>
 
 <div>
@@ -98,7 +103,7 @@ It only touches the official `@deepseek-ai` packages and local config on the use
    - Unauthorized intrusion or attacks on public or private computer information systems; extortion, sabotage, credential stuffing, or spreading malicious payloads;
    - Inducing, generating, or spreading any content the law forbids, including threats to national security, terrorism, violence, pornography, gambling, fraud, and privacy or intellectual-property infringement;
    - Violating the model provider's terms of service and acceptable-use policy.
-6. **The user bears all responsibility.** The project is provided as-is. The maintainers make no warranty of completeness, security, or fitness. **Users independently bear all civil, administrative, and criminal liability** for download, deploy, run, modify, distribute, and all resulting inputs and outputs. The maintainers and contributors bear no direct, indirect, or joint liability for abuse.
+6. **The user bears all responsibility.** The project is provided under Apache-2.0 as-is. The maintainers make no warranty of completeness, security, or fitness. **Users independently bear all civil, administrative, and criminal liability** for download, deploy, run, modify, distribute, and all resulting inputs and outputs. The maintainers and contributors bear no direct, indirect, or joint liability for abuse.
 8. **No affiliation.** This is an independent open-source security-eval research project. It has no employment, commercial, authorization, or endorsement relationship with DeepSeek or its affiliates. "Official" here only means the eval target is the official DeepSeek Harness package on the user's machine. It does **not** mean DeepSeek developed, approved, or warrants this plugin.
 9. **Attribution is required.** If you borrow this project's name, ideas, code, or prompts, you must credit the maintainers and name this repository. Failure to attribute will be pursued. See [Attribution required](#attribution-required).
 
