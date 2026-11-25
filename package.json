@@ -1,0 +1,110 @@
+{
+  "name": "de-policy",
+  "version": "2.0.1",
+  "description": "DeepSeek Harness security-policy engine: every model can run with an adjusted policy, and different models can carry different prompts; presets target DSH 0.2.2-rc.3. Full edition with Super Agent support; prompts tuned to lower the refusal rate and improve stability.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./client.js",
+    "./redteam": "./lib/redteam/index.js",
+    "./redteam/store": "./lib/redteam/store.js",
+    "./redteam/ui": "./lib/redteam/ui.js",
+    "./redteam/tools": "./lib/redteam/tools.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "de-policy": "bin/de-policy.js"
+  },
+  "files": [
+    "lib",
+    "!lib/default-prompt-inject.md",
+    "!lib/default-prompt-inject.md.bak",
+    "!lib/default-prompt-inject.zh.md",
+    "!lib/default-prompt-inject.en.md",
+    "bin",
+    "docs",
+    "!docs/agents",
+    "presets",
+    "skills",
+    "scripts",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "release-notes.md",
+    "!**/.git",
+    "!**/.{git,idea,vscode,codex,claude,agents,windsurf,cursor,ssh,aws,azure,secrets,scratch}/**",
+    "!**/.config/gcloud/**",
+    "!**/secrets/**",
+    "!**/.env",
+    "!**/.env.*",
+    "!**/{.npmrc,.pypirc,.netrc,_netrc}",
+    "!**/*.{pem,key,p12,pfx,keystore,jks}",
+    "!**/{id_rsa,id_dsa,id_ecdsa,id_ed25519}",
+    "!**/{credentials,credentials.*,service-account*}.json",
+    "!**/default-prompt-inject*.md",
+    "!**/*.{bak,asar,tgz,log}",
+    "!**/{.DS_Store,Thumbs.db}",
+    "!**/*.{iml,ipr,iws,code-workspace}",
+    "!scripts/{tmp,test}-*.mjs"
+  ],
+  "scripts": {
+    "embed-prompt": "node scripts/embed-default-prompt.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "build": "node scripts/build-client.mjs",
+    "test": "node --test test/*.test.js"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "dsh-plugins",
+    "llm-security",
+    "harness-security",
+    "deepseek-harness",
+    "red-team",
+    "instructions",
+    "rules",
+    "prompt-eval",
+    "agent",
+    "network-security"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dshTarget": "0.2.2-rc.3",
+  "dshTargets": [
+    "0.2.2-rc.3"
+  ],
+  "author": "Delify AI",
+  "homepage": "https://github.com/Delify-Solutions/de-policy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Delify-Solutions/de-policy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Delify-Solutions/de-policy/issues"
+  },
+  "private": true
+}

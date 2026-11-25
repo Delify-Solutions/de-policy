@@ -1,0 +1,156 @@
+name: CI
+
+# Runs on every push to a branch and on every pull request. The point is to catch
+# the two failure modes this repository actually has: a source edit that leaves the
+# shipped bundle stale, and a translation that breaks a parser which reads model
+# output.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # store-core.js imports DatabaseSync from node:sqlite, which is unflagged
+      # from 22.13. An older runner fails deep inside a test with
+      # ERR_UNKNOWN_BUILTIN_MODULE; fail here instead, with the number.
+      - name: Node version meets the sqlite floor
+        run: |
+          set -euo pipefail
+          node -v
+          node -e "
+            const [major, minor] = process.versions.node.split('.').map(Number);
+            const ok = major > 22 || (major === 22 && minor >= 13);
+            if (!ok) {
+              console.error('::error::node:sqlite needs Node >= 22.13, runner has ' + process.versions.node);
+              process.exit(1);
+            }
+            const { DatabaseSync } = require('node:sqlite');
+            new DatabaseSync(':memory:').exec('CREATE TABLE t(a)');
+            console.log('node:sqlite available');
+          "
+
+      # `node --check` over every file: a comment edit that removes a block
+      # terminator still parses as valid JS in most editors but not here.
+      - name: Syntax-check every module
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r file; do
+            if ! node --check "$file"; then
+              echo "::error file=$file::does not parse"
+              fail=1
+            fi
+          done < <(find . -name '*.js' -not -path './node_modules/*' -not -path './.git/*' | sort)
+          exit "$fail"
+
+      - name: Validate JSON and YAML
+        run: |
+          set -euo pipefail
+          node -e "
+            const fs = require('fs');
+            const glob = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+              if (e.name === 'node_modules' || e.name === '.git') return [];
+              const p = dir + '/' + e.name;
+              return e.isDirectory() ? glob(p) : [p];
+            });
+            for (const f of glob('.')) {
+              if (f.endsWith('.json')) JSON.parse(fs.readFileSync(f, 'utf8'));
+            }
+            console.log('json ok');
+          "
+
+      # The bundle is generated from lib/redteam/client.js plus six marker regions.
+      # Committing a source edit without rebuilding ships a plugin whose panel does
+      # not match its engine, so this is a hard failure rather than a warning.
+      - name: Bundle is up to date with its sources
+        run: |
+          set -euo pipefail
+          before="$(git hash-object client.js)"
+          npm run build --silent
+          after="$(git hash-object client.js)"
+          if [ "$before" != "$after" ]; then
+            echo "::error::client.js is stale — run 'npm run build' and commit the result"
+            git diff --stat client.js
+            exit 1
+          fi
+          echo "bundle matches its sources"
+
+      - name: Tests
+        run: npm test --silent
+
+      # A plugin that cannot be imported cannot be installed. This catches a
+      # top-level throw that unit tests would miss because they import lazily.
+      - name: Entry points load
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "await import('./lib/index.js'); console.log('lib/index.js ok')"
+          node --input-type=module -e "await import('./lib/redteam/index.js'); console.log('redteam ok')"
+
+      - name: Package contents
+        run: |
+          set -euo pipefail
+          npm pack --dry-run 2>&1 | tee /tmp/pack.log
+          for required in client.js cordis.patch.yml package.json README.md; do
+            grep -q "$required" /tmp/pack.log || { echo "::error::$required missing from the package"; exit 1; }
+          done
+
+  install:
+    name: Install into a DSH profile
+    # Depends on verify: there is no point proving the plugin installs if it does
+    # not parse. The install itself runs against a throwaway HOME so nothing leaks.
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Pack and install from the tarball
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME/.dsh"
+          packdir="$RUNNER_TEMP/pack"
+          mkdir -p "$packdir"
+          npm pack --pack-destination "$packdir" --silent
+          tarball="$(find "$packdir" -name '*.tgz' | head -1)"
+          echo "packed: $tarball"
+          mkdir -p "$RUNNER_TEMP/app"
+          cd "$RUNNER_TEMP/app"
+          npm init -y --silent >/dev/null
+          npm install --silent "$tarball"
+          test -f node_modules/de-policy/package.json
+          test -f node_modules/de-policy/client.js
+          test -f node_modules/de-policy/cordis.patch.yml
+          echo "installed into node_modules"
+
+      - name: The installed plugin loads
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/app"
+          node --input-type=module -e "
+            const mod = await import('de-policy');
+            if (typeof mod.apply !== 'function') throw new Error('apply() is not exported');
+            if (typeof mod.inject !== 'object') throw new Error('inject is not exported');
+            console.log('plugin exports apply/inject');
+          "

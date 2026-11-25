@@ -1,0 +1,175 @@
+name: Release
+
+# Runs when a version tag is pushed. Creating the tag is the act of releasing: the
+# version in package.json, the first line of release-notes.md and the tag must all
+# agree, and the job refuses to publish otherwise.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (must match package.json)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the tag is releasable
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: The tag, package.json and release notes agree
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="v${{ inputs.version }}"
+          fi
+          echo "tag: $tag"
+
+          if [ "$tag" != "v${version}" ]; then
+            echo "::error::tag $tag does not match package.json version $version"
+            exit 1
+          fi
+
+          first="$(head -n 1 release-notes.md | tr -d '\r')"
+          if [ "$first" != "# ${version}" ]; then
+            echo "::error::release-notes.md must start with '# ${version}', found '${first}'"
+            exit 1
+          fi
+
+          # A tag that points at an older commit than main releases old code. That
+          # is occasionally intentional (a hotfix branch), so it warns rather than
+          # fails — but it must be visible in the log.
+          if git rev-parse -q --verify "refs/remotes/origin/main" >/dev/null; then
+            if ! git merge-base --is-ancestor "refs/tags/${tag}" origin/main 2>/dev/null; then
+              echo "::warning::tag ${tag} is not an ancestor of origin/main"
+            fi
+          fi
+
+      - name: Verify before publishing
+        run: |
+          set -euo pipefail
+          npm test --silent
+          before="$(git hash-object client.js)"
+          npm run build --silent
+          after="$(git hash-object client.js)"
+          if [ "$before" != "$after" ]; then
+            echo "::error::client.js is stale at release time — rebuild and re-tag"
+            exit 1
+          fi
+
+  release:
+    name: Publish
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Build the release archive
+        run: |
+          set -euo pipefail
+          version="${{ needs.verify.outputs.version }}"
+          # `git archive` ships exactly what is committed — no intel/, no
+          # node_modules, no stray backup file. That is the same set the npm
+          # tarball contains minus the npm-only metadata.
+          git archive --format=zip \
+            --prefix="de-policy-${version}/" \
+            --output="de-policy-${version}.zip" HEAD
+          test -s "de-policy-${version}.zip"
+          unzip -l "de-policy-${version}.zip" | tail -3
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.verify.outputs.version }}"
+          tag="v${version}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists — uploading the archive to it"
+          else
+            args=(release create "$tag" --title "$tag" --notes-file release-notes.md)
+            case "$version" in
+              *beta*|*alpha*|*rc*) args+=(--prerelease) ;;
+            esac
+            gh "${args[@]}"
+          fi
+          gh release upload "$tag" "de-policy-${version}.zip" --clobber
+
+      - name: Release summary
+        run: |
+          version="${{ needs.verify.outputs.version }}"
+          {
+            echo "## Released v${version}"
+            echo
+            echo "- Archive: \`de-policy-${version}.zip\`"
+            echo "- Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${version}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  npm:
+    name: Publish to npm
+    needs: [verify, release]
+    # npm publishing is optional: a fork or a private mirror has no NPM_TOKEN and
+    # must still be able to cut a GitHub release. `secrets` is not readable in a
+    # job-level `if:`, so the presence check runs as a step and gates the publish.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Is an npm token configured?
+        id: token
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::NPM_TOKEN is not set — skipping the npm publish"
+          fi
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish if the version is not already on the registry
+        if: steps.token.outputs.present == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.verify.outputs.version }}"
+          if npm view "de-policy@${version}" version >/dev/null 2>&1; then
+            echo "de-policy@${version} is already published — nothing to do"
+            exit 0
+          fi
+          npm publish --access public --provenance

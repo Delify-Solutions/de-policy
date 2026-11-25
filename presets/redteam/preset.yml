@@ -1,0 +1,3 @@
+name: Red Team
+description: Chế độ diễn tập công phòng — gửi tên một đơn vị mục tiêu là dựng được tác tử redteam. Tích hợp sẵn phiên chính + năm vai trò thực thi gồm thu thập thông tin / rà soát tài sản / phát hiện lỗ hổng / khai thác lỗ hổng / xâm nhập nội mạng (tối đa 3 vai trò chạy đồng thời), bản đồ tài sản ghi vào cơ sở dữ liệu SQLite, thư viện kỹ năng có thể tự cấu hình.
+order: 10
