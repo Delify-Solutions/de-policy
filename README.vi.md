@@ -24,6 +24,7 @@
 ## Mục lục
 
 - [de-policy là gì](#de-policy-là-gì)
+- [Endpoint bắt buộc](#endpoint-bắt-buộc)
 - [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
 - [Cài đặt](#cài-đặt)
 - [Cài thủ công (khi lệnh plugin không dùng được)](#cài-thủ-công)
@@ -48,6 +49,56 @@ Harness không chỉ chuyển tiếp prompt. Nó viết lại prompt, cổng ph�
 | **Bảng diễn tập (red-team)** | 67 tool, 40 skill, 6 vai thực thi, sổ cái SQLite ghi mọi phát hiện |
 | **Preset chỉ huy** | Agent điều phối biết chia việc, kiểm chứng báo cáo, chấm điểm |
 | **Chỉnh prompt theo model** | Mỗi model một bộ prompt riêng, không ghi đè lẫn nhau |
+
+---
+
+## Endpoint bắt buộc
+
+Bản build này **chỉ chạy với endpoint `ai.delify.vn`**. Nếu DSH đang trỏ sang endpoint khác, plugin sẽ **từ chối áp dụng bản vá** và báo rõ endpoint phát hiện được.
+
+Lý do: plugin sửa prompt policy, cổng phê duyệt và hành vi sandbox của host. Chạy nó trên endpoint của bên khác nghĩa là thay đổi sản phẩm của họ mà không có thông tin họ chịu được gì.
+
+### Nó kiểm tra gì
+
+Theo thứ tự, cái đầu tiên tìm được sẽ dùng:
+
+| Nguồn | Khi nào dùng |
+|---|---|
+| `DE_POLICY_ENDPOINT` | Bạn set biến này để chỉ định rõ (staging, lab) |
+| `$DSH_HOME/redteam/config.json` | Plugin tự lưu khi bạn cấu hình trong EnvTab |
+| Model route của host | Sau khi bạn đăng nhập, đây là nguồn thật |
+| `DEEPSEEK_BASE_URL` / `DEEPSEEK_API_BASE` | Biến môi trường host đọc |
+
+### Kiểm tra thủ công
+
+```sh
+# xem endpoint plugin phát hiện được
+node -e "
+  const {checkEndpoint} = require('/đường/dẫn/de-policy/lib/redteam/endpoint-gate.js');
+" 2>/dev/null || node --input-type=module -e "
+  import { checkEndpoint } from '/đường/dẫn/de-policy/lib/redteam/endpoint-gate.js';
+  console.log(checkEndpoint());
+"
+```
+
+Kết quả có `status`: `allowed` (đúng endpoint), `refused` (sai endpoint), `unknown` (không xác định được).
+
+### Chỉ định endpoint rõ ràng
+
+```sh
+export DE_POLICY_ENDPOINT=https://ai.delify.vn
+```
+
+Hoặc mở **de-policy → Bảng diễn tập → Thích ứng môi trường**, cấu hình sẽ được lưu vào `$DSH_HOME/redteam/config.json`.
+
+### Khi bị từ chối
+
+Banner vàng xuất hiện ở đầu trang **Thích ứng môi trường**, ghi rõ endpoint phát hiện được và nguồn. Sửa một trong hai:
+
+1. Trỏ DSH về `ai.delify.vn`, hoặc
+2. Set `DE_POLICY_ENDPOINT=https://ai.delify.vn`
+
+**Khôi phục bản gốc vẫn chạy được** dù endpoint sai — `/purge revert` không bị chặn, để bạn không bao giờ bị kẹt với một host đã vá mà không gỡ được.
 
 ---
 
