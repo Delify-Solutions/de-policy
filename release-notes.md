@@ -14,4 +14,4 @@
 
 ## Cài đặt và cập nhật
 
-Cài đặt bằng thư mục cục bộ sau khi giải nén; bản web và bản desktop cài riêng, áp dụng riêng. Hiện tại đây là bản cục bộ cố định, tính năng cập nhật trực tuyến và chuyển kênh đã tắt. Các bước chi tiết xem tại [README](./README.md).
+Cài đặt bằng thư mục cục bộ sau khi giải nén; bản web và bản desktop cài riêng, áp dụng riêng. Hiện tại đây là bản cục bộ cố định, tính năng cập nhật trực tuyến và chuyển kênh đã tắt. Các bước chi tiết xem tại [README tiếng Việt](./README.vi.md).
