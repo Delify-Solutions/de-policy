@@ -54,34 +54,34 @@ Harness không chỉ chuyển tiếp prompt. Nó viết lại prompt, cổng ph�
 
 ## Endpoint bắt buộc
 
-Bản build này **chỉ chạy với endpoint `ai.delify.vn`**. Nếu DSH đang trỏ sang endpoint khác, plugin sẽ **từ chối áp dụng bản vá** và báo rõ endpoint phát hiện được.
+Bản build này chỉ chạy khi **model bạn đang chọn** được phục vụ bởi `ai.delify.vn`.
 
-Lý do: plugin sửa prompt policy, cổng phê duyệt và hành vi sandbox của host. Chạy nó trên endpoint của bên khác nghĩa là thay đổi sản phẩm của họ mà không có thông tin họ chịu được gì.
+Điểm quan trọng: DSH có thể giữ **nhiều provider cùng lúc** — official, account, gateway tự dựng, lab. Câu hỏi không phải "máy này có cấu hình endpoint của mình không", mà là **"model tôi sắp chạy có phải của mình không"**. Nên gate đọc **provider đang được chọn**, rồi tra endpoint của provider đó.
 
-### Nó kiểm tra gì
+Nếu DSH đang trỏ sang endpoint khác, plugin **từ chối áp dụng bản vá**.
 
-Theo thứ tự, cái đầu tiên tìm được sẽ dùng:
+### Nó đọc theo thứ tự
 
-| Nguồn | Khi nào dùng |
-|---|---|
-| `DE_POLICY_ENDPOINT` | Bạn set biến này để chỉ định rõ (staging, lab) |
-| `$DSH_HOME/redteam/config.json` | Plugin tự lưu khi bạn cấu hình trong EnvTab |
-| Model route của host | Sau khi bạn đăng nhập, đây là nguồn thật |
-| `DEEPSEEK_BASE_URL` / `DEEPSEEK_API_BASE` | Biến môi trường host đọc |
+| Bước | Nguồn | Ghi chú |
+|---|---|---|
+| 1 | `DE_POLICY_ENDPOINT` | Bạn set để chỉ định rõ (staging, lab). Ưu tiên cao nhất |
+| 2 | **Model đang chọn** | `modelSelection.lastUsed` → provider → endpoint của provider đó |
+| 3 | `$DSH_HOME/redteam/config.json` | Plugin tự lưu từ EnvTab |
+| 4 | `DEEPSEEK_BASE_URL` / `DEEPSEEK_API_BASE` | Biến host đọc |
 
-### Kiểm tra thủ công
+Với bước 2, endpoint của provider lấy theo thứ tự:
+- `baseURL` bạn tự đặt trong profile provider (thắng `defaultBaseURL` — đây là cách trỏ gateway tự dựng về host của mình)
+- `defaultBaseURL` của adapter
+- biến môi trường trong `baseURLEnv`
 
-```sh
-# xem endpoint plugin phát hiện được
-node -e "
-  const {checkEndpoint} = require('/đường/dẫn/de-policy/lib/redteam/endpoint-gate.js');
-" 2>/dev/null || node --input-type=module -e "
-  import { checkEndpoint } from '/đường/dẫn/de-policy/lib/redteam/endpoint-gate.js';
-  console.log(checkEndpoint());
-"
-```
+### Ví dụ
 
-Kết quả có `status`: `allowed` (đúng endpoint), `refused` (sai endpoint), `unknown` (không xác định được).
+Máy có cả `deepseek-official` (→ `api.deepseek.com`) và một gateway của Delify (→ `ai.delify.vn`):
+
+- Chọn model qua gateway Delify → **cho phép**
+- Chọn model qua `deepseek-official` → **từ chối**, banner ghi rõ provider nào và endpoint nào
+
+Đổi model trong DSH là xong, không cần sửa cấu hình.
 
 ### Chỉ định endpoint rõ ràng
 
@@ -89,16 +89,16 @@ Kết quả có `status`: `allowed` (đúng endpoint), `refused` (sai endpoint),
 export DE_POLICY_ENDPOINT=https://ai.delify.vn
 ```
 
-Hoặc mở **de-policy → Bảng diễn tập → Thích ứng môi trường**, cấu hình sẽ được lưu vào `$DSH_HOME/redteam/config.json`.
+Hoặc **de-policy → Bảng diễn tập → Thích ứng môi trường**.
 
 ### Khi bị từ chối
 
-Banner vàng xuất hiện ở đầu trang **Thích ứng môi trường**, ghi rõ endpoint phát hiện được và nguồn. Sửa một trong hai:
+Banner vàng ở đầu trang **Thích ứng môi trường**, ghi rõ: provider đang chọn, endpoint phát hiện được, và nguồn. Sửa bằng cách:
 
-1. Trỏ DSH về `ai.delify.vn`, hoặc
+1. Đổi sang model được phục vụ bởi `ai.delify.vn`, hoặc
 2. Set `DE_POLICY_ENDPOINT=https://ai.delify.vn`
 
-**Khôi phục bản gốc vẫn chạy được** dù endpoint sai — `/purge revert` không bị chặn, để bạn không bao giờ bị kẹt với một host đã vá mà không gỡ được.
+**`/purge revert` luôn chạy được** dù endpoint sai — bạn không bao giờ bị kẹt với host đã vá mà không gỡ được.
 
 ---
 

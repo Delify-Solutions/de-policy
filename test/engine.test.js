@@ -280,24 +280,62 @@ test('the endpoint gate accepts the allowed host and nothing that imitates it', 
 test('the endpoint gate refuses instead of warning, and reports why', async () => {
   const gate = await import('../lib/redteam/endpoint-gate.js')
 
-  const allowed = gate.checkEndpoint({ DE_POLICY_ENDPOINT: 'https://ai.delify.vn' })
+  const allowed = gate.checkEndpoint({ env: { DE_POLICY_ENDPOINT: 'https://ai.delify.vn' } })
   assert.equal(allowed.ok, true)
   assert.equal(allowed.status, 'allowed')
 
-  const refused = gate.checkEndpoint({ DE_POLICY_ENDPOINT: 'https://api.deepseek.com', DSH_HOME: '/nonexistent' })
+  const refused = gate.checkEndpoint({
+    env: { DE_POLICY_ENDPOINT: 'https://api.deepseek.com' }, dshHome: '/nonexistent',
+  })
   assert.equal(refused.ok, false)
   assert.equal(refused.status, 'refused')
   assert.match(refused.message, /ai\.delify\.vn/)
 
   // No endpoint discoverable is a failure to verify, never a pass.
-  const unknown = gate.checkEndpoint({ DSH_HOME: '/nonexistent-gate-test' })
+  const unknown = gate.checkEndpoint({ env: {}, dshHome: '/nonexistent-gate-test' })
   assert.equal(unknown.ok, false)
   assert.equal(unknown.status, 'unknown')
 
   assert.throws(
-    () => gate.assertEndpoint({ DE_POLICY_ENDPOINT: 'https://evil.test', DSH_HOME: '/nonexistent' }),
+    () => gate.assertEndpoint({ env: { DE_POLICY_ENDPOINT: 'https://evil.test' }, dshHome: '/nonexistent' }),
     (error) => error.code === 'ENDPOINT_UNSUPPORTED' && Boolean(error.verdict),
   )
+})
+
+test('the gate asks about the selected provider, not "any configured endpoint"', async () => {
+  const gate = await import('../lib/redteam/endpoint-gate.js')
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  const { join } = await import('node:path')
+
+  // A machine holding both our endpoint and a foreign one. Which one counts depends
+  // on which provider is selected — that is the whole point of the gate.
+  const home = join(process.env.DSH_HOME, 'gate-provider-test')
+  const sessions = join(home, 'storages', 'session_projcache', 'sessions')
+  mkdirSync(sessions, { recursive: true })
+
+  const llm = (selected) => ({
+    listConfigurableProviders: () => [
+      { provider: 'foreign', defaultBaseURL: 'https://api.deepseek.com' },
+      { provider: 'ours', defaultBaseURL: 'https://ai.delify.vn/v1', settingsNs: 'llm-ours', settingsPath: ['profile'] },
+    ],
+    settings: { get: () => ({ profile: {} }) },
+  })
+
+  const select = (provider) => writeFileSync(
+    join(sessions, 's.json'),
+    JSON.stringify({ record: { rows: { modelSelection: { val: { lastUsed: { provider, model: 'm' } } } } } }),
+  )
+
+  select('ours')
+  const okVerdict = gate.checkEndpoint({ env: {}, dshHome: home, llm: llm() })
+  assert.equal(okVerdict.ok, true, 'selected provider on our endpoint passes')
+  assert.equal(okVerdict.provider, 'ours')
+
+  select('foreign')
+  const badVerdict = gate.checkEndpoint({ env: {}, dshHome: home, llm: llm() })
+  assert.equal(badVerdict.ok, false, 'selected provider on another endpoint is refused')
+  assert.equal(badVerdict.provider, 'foreign')
+  assert.match(badVerdict.message, /api\.deepseek\.com/)
 })
 
 test('the endpoint gate reads the plugin config before the environment', async () => {
@@ -309,7 +347,7 @@ test('the endpoint gate reads the plugin config before the environment', async (
   mkdirSync(join(home, 'redteam'), { recursive: true })
   writeFileSync(join(home, 'redteam', 'config.json'), JSON.stringify({ endpoint: 'https://ai.delify.vn' }))
 
-  const verdict = gate.checkEndpoint({ DSH_HOME: home })
+  const verdict = gate.checkEndpoint({ env: {}, dshHome: home })
   assert.equal(verdict.ok, true)
   assert.equal(verdict.source, 'redteam/config.json')
 })
